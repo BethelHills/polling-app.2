@@ -1,11 +1,40 @@
 import { z } from "zod"
+import DOMPurify from 'dompurify'
 
 /**
  * Comprehensive validation schemas for the Polling App
  * These schemas ensure data integrity and security across client and server
  */
 
-// Base poll option validation
+// Create DOMPurify instance for server-side rendering
+const createDOMPurify = () => {
+  if (typeof window === 'undefined') {
+    // Server-side: return a mock DOMPurify that strips HTML tags
+    return {
+      sanitize: (html: string) => html.replace(/<[^>]*>/g, ''), // Strip HTML tags
+      version: 'server-side'
+    }
+  }
+  // Client-side: use the global DOMPurify
+  return DOMPurify
+}
+
+const domPurify = createDOMPurify()
+
+// Enhanced string validation with sanitization
+const sanitizedString = z.string()
+  .min(1, 'Text is required')
+  .max(500, 'Text is too long')
+  .transform((val) => {
+    // Sanitize the string using DOMPurify
+    return domPurify.sanitize(val, {
+      ALLOWED_TAGS: [],
+      ALLOWED_ATTR: [],
+      KEEP_CONTENT: true
+    }).trim()
+  })
+
+// Base poll option validation with sanitization
 const pollOptionSchema = z.string()
   .min(1, 'Option text is required')
   .max(100, 'Option must be less than 100 characters')
@@ -13,8 +42,16 @@ const pollOptionSchema = z.string()
     (value) => value.trim().length > 0,
     { message: 'Option text cannot be empty' }
   )
+  .transform((val) => {
+    // Sanitize the string using DOMPurify
+    return domPurify.sanitize(val, {
+      ALLOWED_TAGS: [],
+      ALLOWED_ATTR: [],
+      KEEP_CONTENT: true
+    }).trim()
+  })
 
-// Poll creation schema with comprehensive validation
+// Poll creation schema with comprehensive validation and sanitization
 export const createPollSchema = z.object({
   title: z.string()
     .min(3, 'Title must be at least 3 characters')
@@ -22,12 +59,29 @@ export const createPollSchema = z.object({
     .refine(
       (value) => value.trim().length >= 3,
       { message: 'Title must be at least 3 characters after trimming whitespace' }
-    ),
+    )
+    .transform((val) => {
+      // Sanitize the string using DOMPurify
+      return domPurify.sanitize(val, {
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: [],
+        KEEP_CONTENT: true
+      }).trim()
+    }),
   
   description: z.string()
     .max(500, 'Description must be less than 500 characters')
     .optional()
-    .or(z.literal('')),
+    .or(z.literal(''))
+    .transform((val) => {
+      if (!val) return ''
+      // Sanitize the string using DOMPurify
+      return domPurify.sanitize(val, {
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: [],
+        KEEP_CONTENT: true
+      }).trim()
+    }),
   
   options: z.array(pollOptionSchema)
     .min(2, 'At least 2 options are required')

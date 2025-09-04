@@ -85,29 +85,8 @@ export async function POST(
       )
     }
 
-    // Check if user has already voted on this poll
-    const { data: existingVote, error: voteCheckError } = await supabaseServerClient
-      .from('votes')
-      .select('id')
-      .eq('poll_id', pollId)
-      .eq('user_id', userId)
-      .single()
-
-    if (voteCheckError && voteCheckError.code !== 'PGRST116') {
-      return NextResponse.json(
-        { success: false, message: "Error checking existing vote" },
-        { status: 500 }
-      )
-    }
-
-    if (existingVote) {
-      return NextResponse.json(
-        { success: false, message: "You have already voted on this poll" },
-        { status: 400 }
-      )
-    }
-
-    // Submit the vote
+    // Submit the vote directly - let database constraint handle duplicates
+    // This eliminates the race condition between check and insert
     const { data: vote, error: voteError } = await supabaseServerClient
       .from('votes')
       .insert({
@@ -119,6 +98,13 @@ export async function POST(
       .single()
 
     if (voteError) {
+      // Handle unique constraint violation (user already voted)
+      if (voteError.code === '23505') {
+        return NextResponse.json(
+          { success: false, message: "You have already voted on this poll" },
+          { status: 409 }
+        )
+      }
       return handleVoteError(voteError)
     }
 

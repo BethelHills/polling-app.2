@@ -63,7 +63,7 @@ export interface AuditLogEntry {
 // Audit logger class
 export class AuditLogger {
   private static instance: AuditLogger;
-  private supabase = supabaseServerClient();
+  private supabase = supabaseServerClient;
 
   private constructor() {}
 

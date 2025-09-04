@@ -5,7 +5,24 @@ import { validateAndSanitizePoll, formatValidationErrors } from '@/lib/validatio
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate request size
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > 10000) { // 10KB limit
+      return NextResponse.json(
+        { success: false, message: "Request too large" },
+        { status: 413 }
+      )
+    }
+
     const body = await request.json()
+    
+    // Validate JSON size
+    if (JSON.stringify(body).length > 10000) {
+      return NextResponse.json(
+        { success: false, message: "Request payload too large" },
+        { status: 413 }
+      )
+    }
     
     // Validate and sanitize the request body
     const validationResult = validateAndSanitizePoll(body)
@@ -21,11 +38,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Authenticate user (server-side)
-    const token = request.headers.get("authorization")?.replace("Bearer ", "")
-    if (!token) {
+    // Authenticate user (server-side) with enhanced validation
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized - No token provided" },
+        { success: false, message: "Invalid authorization header format" },
+        { status: 401 }
+      )
+    }
+
+    const token = authHeader.replace("Bearer ", "").trim()
+    if (!token || token.length < 10) {
+      return NextResponse.json(
+        { success: false, message: "Invalid token format" },
         { status: 401 }
       )
     }
