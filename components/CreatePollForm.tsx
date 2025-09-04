@@ -5,11 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { createPoll } from '@/lib/mock-actions'
-import { FormField } from '@/components/ui/form-field'
-import { AnimatedInput, AnimatedTextarea } from '@/components/ui/animated-input'
+import { EnhancedFormField } from '@/components/ui/enhanced-form-field'
 import { OptionInput } from '@/components/ui/option-input'
 import { AlertMessage } from '@/components/ui/alert-message'
-import { CharacterCounter } from '@/components/ui/form-field'
 import { 
   validatePollForm, 
   validateField, 
@@ -166,48 +164,34 @@ export function CreatePollForm() {
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Poll Title */}
-          <FormField
+          <EnhancedFormField
             label="Poll Title"
+            value={formState.title}
+            onChange={updateTitle}
+            placeholder="What's your poll about?"
             error={fieldErrors.title}
             success={!fieldErrors.title && formState.title.length >= 3}
             required
-          >
-            <AnimatedInput
-              value={formState.title}
-              onChange={(e) => updateTitle(e.target.value)}
-              placeholder="What's your poll about?"
-              maxLength={200}
-              error={fieldErrors.title}
-              success={!fieldErrors.title && formState.title.length >= 3}
-            />
-            <CharacterCounter 
-              current={titleCharCount.current} 
-              max={titleCharCount.max}
-              className={titleCharCount.isOverLimit ? 'text-red-500' : ''}
-            />
-          </FormField>
+            maxLength={200}
+            showCharacterCount={true}
+            fieldName="title"
+            helpText="Choose a clear, engaging title that describes your poll"
+          />
 
           {/* Poll Description */}
-          <FormField
+          <EnhancedFormField
             label="Description"
+            value={formState.description}
+            onChange={updateDescription}
+            type="textarea"
+            placeholder="Add more context about your poll..."
             error={fieldErrors.description}
             success={!fieldErrors.description && formState.description.length > 0}
-          >
-            <AnimatedTextarea
-              value={formState.description}
-              onChange={(e) => updateDescription(e.target.value)}
-              placeholder="Add more context about your poll..."
-              rows={3}
-              maxLength={500}
-              error={fieldErrors.description}
-              success={!fieldErrors.description && formState.description.length > 0}
-            />
-            <CharacterCounter 
-              current={descriptionCharCount.current} 
-              max={descriptionCharCount.max}
-              className={descriptionCharCount.isOverLimit ? 'text-red-500' : ''}
-            />
-          </FormField>
+            maxLength={500}
+            showCharacterCount={true}
+            fieldName="description"
+            helpText="Optional: Provide additional context or instructions"
+          />
 
           {/* Poll Options */}
           <div className="space-y-4">
@@ -241,6 +225,9 @@ export function CreatePollForm() {
                   success={!fieldErrors[`option-${index}`] && option.trim().length > 0}
                   canRemove={formState.options.length > 2}
                   index={index}
+                  allOptions={formState.options}
+                  maxLength={100}
+                  showValidation={true}
                 />
               ))}
             </div>
@@ -258,6 +245,9 @@ export function CreatePollForm() {
               type={message.type}
               message={message.text}
               onDismiss={() => setMessage(null)}
+              showAnimation={true}
+              autoClose={message.type === 'success'}
+              autoCloseDelay={3000}
             />
           )}
 
