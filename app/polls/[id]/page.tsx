@@ -10,7 +10,8 @@ interface PollPageProps {
 }
 
 export default async function PollPage({ params }: PollPageProps) {
-  const poll = await getPoll(params.id)
+  const { id } = await params
+  const poll = await getPoll(id)
 
   if (!poll) {
     notFound()
@@ -34,7 +35,8 @@ export default async function PollPage({ params }: PollPageProps) {
 }
 
 export async function generateMetadata({ params }: PollPageProps) {
-  const poll = await getPoll(params.id)
+  const { id } = await params
+  const poll = await getPoll(id)
   
   if (!poll) {
     return {
