@@ -1,44 +1,136 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { createPoll } from '@/lib/mock-actions'
-import { Plus, X, CheckCircle } from 'lucide-react'
+import { FormField } from '@/components/ui/form-field'
+import { AnimatedInput, AnimatedTextarea } from '@/components/ui/animated-input'
+import { OptionInput } from '@/components/ui/option-input'
+import { AlertMessage } from '@/components/ui/alert-message'
+import { CharacterCounter } from '@/components/ui/form-field'
+import { 
+  validatePollForm, 
+  validateField, 
+  getCharacterCount, 
+  getInitialFormState,
+  type FormState 
+} from '@/lib/form-validation'
+import { Plus, Sparkles } from 'lucide-react'
 
 export function CreatePollForm() {
   const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [options, setOptions] = useState(['', ''])
+  const [formState, setFormState] = useState<FormState>(getInitialFormState())
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  // Real-time validation effect
+  useEffect(() => {
+    const validation = validatePollForm({
+      title: formState.title,
+      description: formState.description,
+      options: formState.options
+    })
+    
+    setFormState(prev => ({ ...prev, isValid: validation.isValid }))
+    
+    // Clear field errors when form becomes valid
+    if (validation.isValid) {
+      setFieldErrors({})
+    }
+  }, [formState.title, formState.description, formState.options])
 
   const addOption = () => {
-    if (options.length < 10) {
-      setOptions([...options, ''])
+    if (formState.options.length < 10) {
+      setFormState(prev => ({
+        ...prev,
+        options: [...prev.options, '']
+      }))
     }
   }
 
   const removeOption = (index: number) => {
-    if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index))
+    if (formState.options.length > 2) {
+      setFormState(prev => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== index)
+      }))
     }
   }
 
   const updateOption = (index: number, value: string) => {
-    const newOptions = [...options]
-    newOptions[index] = value
-    setOptions(newOptions)
+    setFormState(prev => {
+      const newOptions = [...prev.options]
+      newOptions[index] = value
+      return { ...prev, options: newOptions }
+    })
+
+    // Real-time validation for this option
+    const error = validateField('option', value, formState.options)
+    setFieldErrors(prev => ({
+      ...prev,
+      [`option-${index}`]: error || ''
+    }))
   }
 
-  const handleSubmit = async (formData: FormData) => {
-    setIsSubmitting(true)
+  const updateTitle = (value: string) => {
+    setFormState(prev => ({ ...prev, title: value }))
+    
+    const error = validateField('title', value)
+    setFieldErrors(prev => ({
+      ...prev,
+      title: error || ''
+    }))
+  }
+
+  const updateDescription = (value: string) => {
+    setFormState(prev => ({ ...prev, description: value }))
+    
+    const error = validateField('description', value)
+    setFieldErrors(prev => ({
+      ...prev,
+      description: error || ''
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Final validation before submission
+    const validation = validatePollForm({
+      title: formState.title,
+      description: formState.description,
+      options: formState.options
+    })
+
+    if (!validation.isValid) {
+      const errors: Record<string, string> = {}
+      validation.errors.forEach(error => {
+        errors[error.field] = error.message
+      })
+      setFieldErrors(errors)
+      setMessage({ 
+        type: 'error', 
+        text: 'Please fix the errors below before submitting' 
+      })
+      return
+    }
+
+    setFormState(prev => ({ ...prev, isSubmitting: true }))
     setMessage(null)
 
     try {
+      // Create FormData for the server action
+      const formData = new FormData()
+      formData.append('title', formState.title.trim())
+      formData.append('description', formState.description.trim())
+      formState.options.forEach(option => {
+        if (option.trim()) {
+          formData.append('options', option.trim())
+        }
+      })
+
       const result = await createPoll(formData)
       
       if (result.success && result.pollId) {
@@ -53,54 +145,84 @@ export function CreatePollForm() {
     } catch (error) {
       setMessage({ type: 'error', text: 'An unexpected error occurred' })
     } finally {
-      setIsSubmitting(false)
+      setFormState(prev => ({ ...prev, isSubmitting: false }))
     }
   }
 
+  const titleCharCount = getCharacterCount(formState.title, 200)
+  const descriptionCharCount = getCharacterCount(formState.description, 500)
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Poll Details</CardTitle>
+    <Card className="overflow-hidden">
+      <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b">
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          Create New Poll
+        </CardTitle>
         <CardDescription>
-          Fill in the details for your new poll
+          Fill in the details for your new poll. All fields with * are required.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form action={handleSubmit} className="space-y-6">
+      <CardContent className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Poll Title */}
-          <div className="space-y-2">
-            <Label htmlFor="title">Poll Title *</Label>
-            <Input
-              id="title"
-              name="title"
+          <FormField
+            label="Poll Title"
+            error={fieldErrors.title}
+            success={!fieldErrors.title && formState.title.length >= 3}
+            required
+          >
+            <AnimatedInput
+              value={formState.title}
+              onChange={(e) => updateTitle(e.target.value)}
               placeholder="What's your poll about?"
-              required
               maxLength={200}
+              error={fieldErrors.title}
+              success={!fieldErrors.title && formState.title.length >= 3}
             />
-          </div>
+            <CharacterCounter 
+              current={titleCharCount.current} 
+              max={titleCharCount.max}
+              className={titleCharCount.isOverLimit ? 'text-red-500' : ''}
+            />
+          </FormField>
 
           {/* Poll Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
-            <Textarea
-              id="description"
-              name="description"
+          <FormField
+            label="Description"
+            error={fieldErrors.description}
+            success={!fieldErrors.description && formState.description.length > 0}
+          >
+            <AnimatedTextarea
+              value={formState.description}
+              onChange={(e) => updateDescription(e.target.value)}
               placeholder="Add more context about your poll..."
               rows={3}
               maxLength={500}
+              error={fieldErrors.description}
+              success={!fieldErrors.description && formState.description.length > 0}
             />
-          </div>
+            <CharacterCounter 
+              current={descriptionCharCount.current} 
+              max={descriptionCharCount.max}
+              className={descriptionCharCount.isOverLimit ? 'text-red-500' : ''}
+            />
+          </FormField>
 
           {/* Poll Options */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label>Poll Options *</Label>
+              <div>
+                <h3 className="text-sm font-medium">Poll Options</h3>
+                <p className="text-xs text-muted-foreground">Minimum 2, maximum 10 options</p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={addOption}
-                disabled={options.length >= 10}
+                disabled={formState.options.length >= 10}
+                className="transition-all duration-200 hover:scale-105"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Option
@@ -108,55 +230,63 @@ export function CreatePollForm() {
             </div>
             
             <div className="space-y-3">
-              {options.map((option, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    name="options"
-                    placeholder={`Option ${index + 1}`}
-                    value={option}
-                    onChange={(e) => updateOption(index, e.target.value)}
-                    required
-                    maxLength={100}
-                  />
-                  {options.length > 2 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeOption(index)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+              {formState.options.map((option, index) => (
+                <OptionInput
+                  key={index}
+                  value={option}
+                  onChange={(value) => updateOption(index, value)}
+                  onRemove={formState.options.length > 2 ? () => removeOption(index) : undefined}
+                  placeholder={`Option ${index + 1}`}
+                  error={fieldErrors[`option-${index}`]}
+                  success={!fieldErrors[`option-${index}`] && option.trim().length > 0}
+                  canRemove={formState.options.length > 2}
+                  index={index}
+                />
               ))}
             </div>
             
-            <p className="text-sm text-muted-foreground">
-              Minimum 2 options, maximum 10 options
-            </p>
+            {formState.options.length < 2 && (
+              <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                ⚠️ At least 2 options are required to create a poll
+              </p>
+            )}
           </div>
 
           {/* Message Display */}
           {message && (
-            <div className={`p-4 rounded-md flex items-center gap-2 ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
-              {message.type === 'success' && <CheckCircle className="h-5 w-5" />}
-              {message.text}
-            </div>
+            <AlertMessage
+              type={message.type}
+              message={message.text}
+              onDismiss={() => setMessage(null)}
+            />
           )}
 
           {/* Submit Button */}
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full"
-          >
-            {isSubmitting ? 'Creating Poll...' : 'Create Poll'}
-          </Button>
+          <div className="pt-4 border-t">
+            <Button
+              type="submit"
+              disabled={formState.isSubmitting || !formState.isValid}
+              className="w-full h-12 text-base font-medium transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100"
+            >
+              {formState.isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Creating Poll...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Create Poll
+                </div>
+              )}
+            </Button>
+            
+            {!formState.isValid && formState.title && (
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Complete all required fields to create your poll
+              </p>
+            )}
+          </div>
         </form>
       </CardContent>
     </Card>

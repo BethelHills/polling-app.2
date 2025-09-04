@@ -1,7 +1,7 @@
 import { getAllPolls } from '@/lib/mock-actions'
 import { PollCard } from '@/components/PollCard'
 import { Button } from '@/components/ui/button'
-import { Plus, BarChart3 } from 'lucide-react'
+import { Plus, BarChart3, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function Home() {
@@ -56,10 +56,10 @@ export default async function Home() {
                   View Demo Poll
                 </Button>
               </Link>
-              <Link href="/demo">
-                <Button size="lg" variant="secondary">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Demo All Features
+              <Link href="/enhanced-demo">
+                <Button size="lg" variant="secondary" className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Enhanced Demo
                 </Button>
               </Link>
             </div>
