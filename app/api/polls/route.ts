@@ -1,53 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { z } from 'zod'
-
-// Validation schema for poll creation
-const createPollSchema = z.object({
-  title: z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be less than 200 characters'),
-  description: z.string().max(500, 'Description must be less than 500 characters').optional(),
-  options: z.array(z.string().min(1, 'Option text is required').max(100, 'Option must be less than 100 characters'))
-    .min(2, 'At least 2 options are required')
-    .max(10, 'Maximum 10 options allowed')
-    .refine(
-      (options) => {
-        const texts = options.map(opt => opt.trim().toLowerCase())
-        return new Set(texts).size === texts.length
-      },
-      { message: 'Options must be unique' }
-    )
-})
+import { supabaseServerClient } from '@/lib/supabaseServerClient'
+import { auditLog } from '@/lib/audit-logger'
+import { validateAndSanitizePoll, formatValidationErrors } from '@/lib/validation-schemas'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    // Validate the request body
-    const validationResult = createPollSchema.safeParse(body)
+    // Validate and sanitize the request body
+    const validationResult = validateAndSanitizePoll(body)
     
     if (!validationResult.success) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           message: 'Validation failed',
-          errors: validationResult.error?.issues?.map(err => ({
-            field: err.path.join('.'),
-            message: err.message
-          })) || []
+          errors: validationResult.errors
         },
         { status: 400 }
       )
     }
 
-    const { title, description, options } = validationResult.data
+    // Authenticate user (server-side)
+    const token = request.headers.get("authorization")?.replace("Bearer ", "")
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized - No token provided" },
+        { status: 401 }
+      )
+    }
 
-    // Create the poll
-    const { data: poll, error: pollError } = await supabaseAdmin
+    const { data: userData, error: userErr } = await supabaseServerClient.auth.getUser(token)
+    if (userErr || !userData?.user) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized - Invalid token" },
+        { status: 401 }
+      )
+    }
+
+    const { title, description, options } = validationResult.data!
+
+    // Create the poll with user ownership
+    const { data: poll, error: pollError } = await supabaseServerClient
       .from('polls')
       .insert({
         title,
         description: description || null,
-        is_active: true
+        is_active: true,
+        owner_id: userData.user.id
       })
       .select()
       .single()
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         order: index
       }))
 
-    const { error: optionsError } = await supabaseAdmin
+    const { error: optionsError } = await supabaseServerClient
       .from('poll_options')
       .insert(optionsData)
 
@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
         { success: false, message: 'Poll created but options failed' },
         { status: 500 }
       )
+    }
+
+    // Log poll creation for audit trail
+    try {
+      await auditLog.pollCreated(request, userData.user.id, poll.id, title)
+    } catch (auditError) {
+      console.error('Failed to log poll creation audit event:', auditError)
+      // Don't fail the request if audit logging fails
     }
 
     return NextResponse.json(
@@ -108,7 +116,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const { data: polls, error } = await supabaseAdmin
+    const { data: polls, error } = await supabaseServerClient
       .from('polls')
       .select(`
         *,

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Poll } from '@/lib/types'
 import { Users, Calendar, ArrowRight } from 'lucide-react'
+import { SafePollDescription } from '@/components/SafeHtmlRenderer'
 
 interface PollCardProps {
   poll: Poll
@@ -26,7 +27,10 @@ export function PollCard({ poll }: PollCardProps) {
               <CardTitle className="line-clamp-2">{poll.title}</CardTitle>
               {poll.description && (
                 <CardDescription className="line-clamp-2">
-                  {poll.description}
+                  <SafePollDescription 
+                    description={poll.description}
+                    fallback={poll.description}
+                  />
                 </CardDescription>
               )}
             </div>

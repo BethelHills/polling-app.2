@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { PollWithResults } from '@/lib/types'
 import { submitVote } from '@/lib/mock-actions'
 import { CheckCircle, Users, Calendar } from 'lucide-react'
+import { SafeRichText } from '@/components/SafeHtmlRenderer'
 
 interface PollDetailViewProps {
   poll: PollWithResults
@@ -69,7 +70,10 @@ export function PollDetailView({ poll }: PollDetailViewProps) {
               <CardTitle className="text-2xl">{poll.title}</CardTitle>
               {poll.description && (
                 <CardDescription className="text-base">
-                  {poll.description}
+                  <SafeRichText 
+                    content={poll.description}
+                    fallback={poll.description}
+                  />
                 </CardDescription>
               )}
             </div>
